@@ -1,10 +1,14 @@
-// frontend/script.js
+// Your backend API
+const API_BASE = "https://let-waat.onrender.com/api";
+
 const video = document.getElementById("video");
 const canvas = document.getElementById("canvas");
 const captureBtn = document.getElementById("captureBtn");
 const uploadInput = document.getElementById("upload");
+
 const detectedEl = document.getElementById("detected");
 const rawEl = document.getElementById("raw");
+
 const saveBtn = document.getElementById("save");
 const listEl = document.getElementById("list");
 const refreshBtn = document.getElementById("refresh");
@@ -12,13 +16,10 @@ const exportPdfBtn = document.getElementById("exportPdf");
 const compareBtn = document.getElementById("compareBtn");
 const compareResult = document.getElementById("compareResult");
 
-// ⭐ UPDATED: Your backend URL
-const API_BASE = "https://let-waat.onrender.com/api";
-
 let selectedForCompare = [null, null];
 let appliances = [];
 
-// start camera
+// -------- START CAMERA ----------
 async function startCamera() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
@@ -26,87 +27,72 @@ async function startCamera() {
       audio: false
     });
     video.srcObject = stream;
-    await video.play();
-  } catch (e) {
-    console.warn("Camera error", e);
+  } catch (err) {
+    console.warn("Camera not available", err);
   }
 }
 startCamera();
 
-// helper to send image blob to /api/ocr
+// -------- OCR SEND ----------
 async function sendBlobForOcr(blob) {
   const fd = new FormData();
-  fd.append("image", blob, "capture.jpg");
-
+  fd.append("image", blob);
   const res = await fetch(`${API_BASE}/ocr`, {
     method: "POST",
     body: fd
   });
-
-  const json = await res.json();
-  return json;
+  return await res.json();
 }
 
-captureBtn.onclick = async () => {
-  const w = video.videoWidth || 640;
-  const h = video.videoHeight || 480;
-  canvas.width = w;
-  canvas.height = h;
+captureBtn.onclick = () => {
+  const w = video.videoWidth, h = video.videoHeight;
+  canvas.width = w, canvas.height = h;
+  canvas.getContext("2d").drawImage(video, 0, 0, w, h);
 
-  const ctx = canvas.getContext("2d");
-  ctx.drawImage(video, 0, 0, w, h);
-
-  canvas.toBlob(async (blob) => {
-    if (!blob) return;
-    const result = await sendBlobForOcr(blob);
-    handleOcrResult(result);
+  canvas.toBlob(async (b) => {
+    if (!b) return;
+    const r = await sendBlobForOcr(b);
+    handleOcrResult(r);
   }, "image/jpeg", 0.9);
 };
 
 uploadInput.onchange = async (e) => {
   const file = e.target.files[0];
   if (!file) return;
-  const result = await sendBlobForOcr(file);
-  handleOcrResult(result);
+  const r = await sendBlobForOcr(file);
+  handleOcrResult(r);
 };
 
-function handleOcrResult(res) {
-  if (!res) return;
-  detectedEl.textContent = res.estimated_kwh_per_year ?? "—";
-  rawEl.textContent = res.raw_text || JSON.stringify(res);
+function handleOcrResult(r) {
+  detectedEl.textContent = r.estimated_kwh_per_year || "—";
+  rawEl.textContent = r.raw_text || "—";
 }
 
-// Save appliance
+// -------- SAVE APPLIANCE ----------
 saveBtn.onclick = async () => {
-  const name = document.getElementById("name").value || "Unnamed";
-  const price = document.getElementById("price").value || 0;
-  const rate = document.getElementById("rate").value || 0;
-  const manual = document.getElementById("manualAec").value || "";
-  const aec = manual || detectedEl.textContent || "";
+  const name = document.getElementById("name").value;
+  const price = document.getElementById("price").value;
+  const rate = document.getElementById("rate").value;
+  const manual = document.getElementById("manualAec").value;
 
-  if (!aec) return alert("Please provide AEC (detected or manual)");
+  const kwh = manual || detectedEl.textContent;
+  if (!kwh || kwh === "—") return alert("No AEC detected!");
 
   const fd = new FormData();
   fd.append("name", name);
   fd.append("price", price);
   fd.append("energy_rate", rate);
-  fd.append("aec", aec);
+  fd.append("aec", kwh);
 
-  const res = await fetch(`${API_BASE}/add_appliance`, {
-    method: "POST",
-    body: fd
-  });
-
-  const json = await res.json();
-  alert(json.message || "Saved");
+  const res = await fetch(`${API_BASE}/add_appliance`, { method: "POST", body: fd });
+  alert("Saved successfully!");
   fetchList();
 };
 
-// fetch saved appliances
+// -------- FETCH LIST ----------
 async function fetchList() {
   const res = await fetch(`${API_BASE}/list_appliances`);
-  const data = await res.json();
-  appliances = data;
+  appliances = await res.json();
   renderList();
 }
 refreshBtn.onclick = fetchList;
@@ -114,60 +100,33 @@ fetchList();
 
 function renderList() {
   listEl.innerHTML = "";
-  appliances.forEach((a) => {
+  appliances.forEach(a => {
     const div = document.createElement("div");
     div.className = "item";
 
-    const left = document.createElement("div");
-    left.innerHTML = `
-      <strong>${escapeHtml(a.name)}</strong>
-      <div style="font-size:12px;color:#666">${a.energy_kwh} kWh/year • ₹${a.price}</div>
+    div.innerHTML = `
+      <div>
+        <strong>${a.name}</strong><br>
+        <small>${a.energy_kwh} kWh • ₹${a.price}</small>
+      </div>
+      <div>
+        <button onclick="selectSlot(0, ${a.id})">Slot A</button>
+        <button onclick="selectSlot(1, ${a.id})">Slot B</button>
+      </div>
     `;
-
-    const right = document.createElement("div");
-    const btnA = document.createElement("button");
-    btnA.textContent = "Slot A";
-    btnA.style.marginRight = "6px";
-    btnA.onclick = () => toggleSlot(0, a.id, btnA);
-
-    const btnB = document.createElement("button");
-    btnB.textContent = "Slot B";
-    btnB.onclick = () => toggleSlot(1, a.id, btnB);
-
-    right.appendChild(btnA);
-    right.appendChild(btnB);
-    div.appendChild(left);
-    div.appendChild(right);
 
     listEl.appendChild(div);
   });
 }
 
-function toggleSlot(slot, id, btn) {
-  if (selectedForCompare[slot] === id) selectedForCompare[slot] = null;
-  else selectedForCompare[slot] = id;
-  fetchList();
-  highlightSelected();
-}
+window.selectSlot = (slot, id) => {
+  selectedForCompare[slot] = id;
+};
 
-function highlightSelected() {
-  const items = Array.from(listEl.children);
-  items.forEach((el, idx) => {
-    const a = appliances[idx];
-    if (!a) return;
-    if (selectedForCompare.includes(a.id)) {
-      el.style.border = "2px solid #0b74ff";
-      el.style.background = "#f0f7ff";
-    } else {
-      el.style.border = "";
-      el.style.background = "";
-    }
-  });
-}
-
+// -------- COMPARE ----------
 compareBtn.onclick = async () => {
   if (!selectedForCompare[0] || !selectedForCompare[1])
-    return alert("Choose two appliances using Slot A and Slot B");
+    return alert("Select two appliances!");
 
   const res = await fetch(`${API_BASE}/compare`, {
     method: "POST",
@@ -175,40 +134,18 @@ compareBtn.onclick = async () => {
     body: JSON.stringify({ ids: selectedForCompare })
   });
 
-  const json = await res.json();
-  displayCompare(json);
+  const data = await res.json();
+  compareResult.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
 };
 
-function displayCompare(data) {
-  compareResult.innerHTML = `<pre>${escapeHtml(JSON.stringify(data, null, 2))}</pre>`;
-}
-
+// -------- EXPORT PDF ----------
 exportPdfBtn.onclick = async () => {
   const res = await fetch(`${API_BASE}/export_pdf`);
-
-  if (!res.ok) return alert("PDF export failed");
-
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
-
   const a = document.createElement("a");
   a.href = url;
   a.download = "WattCompare_Report.pdf";
-  document.body.appendChild(a);
   a.click();
-  a.remove();
-
   URL.revokeObjectURL(url);
 };
-
-// helper
-function escapeHtml(s) {
-  if (!s) return "";
-  return s.toString().replace(/[&<>"']/g, c => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#39;'
-  })[c]);
-}
