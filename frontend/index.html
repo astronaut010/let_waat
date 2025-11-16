@@ -1,60 +1,67 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>WattCompare</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WattCompare – Energy Label Scanner</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="app">
-    <header>
-      <h1>⚡ WattCompare</h1>
-      <div class="controls">
-        <button id="refresh">Refresh List</button>
-        <button id="exportPdf">Download PDF Report</button>
-      </div>
-    </header>
 
-    <main>
-      <section class="leftcard">
-        <video id="video" autoplay playsinline></video>
-        <div class="buttons">
-          <button id="captureBtn">📸 Scan Label</button>
-          <label class="filelabel">Upload image
-            <input type="file" id="upload" accept="image/*" />
-          </label>
-        </div>
-        <div class="ocrresult">
-          <div>Detected AEC (kWh/year): <strong id="detected">—</strong></div>
-          <pre id="raw" class="raw"></pre>
-        </div>
-      </section>
+  <header>
+    <h1>⚡ WattCompare</h1>
+    <p>Scan appliance labels • Detect kWh • Compare • Save • Generate report</p>
+  </header>
 
-      <section class="rightcard">
-        <h2>Save Appliance</h2>
-        <label>Name <input id="name" /></label>
-        <label>Price <input id="price" type="number" /></label>
-        <label>Electricity Rate (per kWh) <input id="rate" type="number" step="0.01" /></label>
-        <label>Manual AEC (kWh/year) <input id="manualAec" /></label>
-        <button id="save">Save Appliance</button>
+  <section class="card">
+    <h2>📸 Scan or Upload Energy Label</h2>
 
-        <hr/>
+    <video id="video" autoplay playsinline></video>
+    <canvas id="canvas" style="display:none;"></canvas>
 
-        <h3>Saved Appliances</h3>
-        <div id="list" class="list"></div>
+    <div class="button-group">
+      <button id="captureBtn">📷 Capture from Camera</button>
+      <input type="file" id="upload" accept="image/*">
+    </div>
 
-        <div class="compare-controls">
-          <button id="compareBtn">Compare Selected</button>
-        </div>
+    <div id="ocrResult">
+      <p><strong>Detected kWh/year:</strong> <span id="detected">—</span></p>
+      <p><strong>Raw OCR Text:</strong></p>
+      <pre id="raw">—</pre>
+    </div>
 
-        <div id="compareResult" class="compareResult"></div>
-      </section>
-    </main>
+    <label>Manual Input (optional kWh/year)</label>
+    <input id="manualAec" placeholder="Enter manually if OCR fails">
+  </section>
 
-    <canvas id="canvas" style="display:none"></canvas>
-    <footer>WattCompare • Backend served same origin</footer>
-  </div>
+  <section class="card">
+    <h2>💾 Save Appliance</h2>
+
+    <input id="name" placeholder="Appliance Name">
+    <input id="price" type="number" placeholder="Price ₹">
+    <input id="rate" type="number" placeholder="Electricity Rate ₹/kWh">
+
+    <button id="save">Save Appliance</button>
+  </section>
+
+  <section class="card">
+    <h2>📋 Saved Appliances</h2>
+    <button id="refresh">🔄 Refresh List</button>
+    <div id="list"></div>
+  </section>
+
+  <section class="card">
+    <h2>⚖️ Compare Appliances</h2>
+    <button id="compareBtn">Compare Selected</button>
+    <div id="compareResult"></div>
+
+    <h2>📄 Export Report</h2>
+    <button id="exportPdf">Download PDF Report</button>
+  </section>
+
+  <footer>
+    <p>Made with ❤️ for global energy efficiency</p>
+  </footer>
 
   <script src="script.js"></script>
 </body>
