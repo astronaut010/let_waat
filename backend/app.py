@@ -146,15 +146,43 @@ def ocr_image_bytes(image_bytes):
 
 # --------- API Endpoints (namespace /api) ----------
 @app.route("/api/ocr", methods=["POST"])
-def api_ocr():
+def ocr_image():
     if "image" not in request.files:
-        return jsonify({"error": "No image file uploaded"}), 400
-    f = request.files["image"]
-    img_bytes = f.read()
-    aec, raw_text = ocr_image_bytes(img_bytes)
-    return jsonify({"estimated_kwh_per_year": aec, "raw_text": raw_text})
+        return jsonify({"error": "No image received"}), 400
+
+    img_file = request.files["image"]
+
+    # Save uploaded image temporarily
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
+        img_path = tmp.name
+        img_file.save(img_path)
+
+    try:
+        # Open image with PIL
+        img = Image.open(img_path)
+
+        # Run OCR
+        raw_text = pytesseract.image_to_string(img)
+
+        # Extract numbers (kWh)
+        numbers = re.findall(r"\d+", raw_text)
+        estimated = max([int(n) for n in numbers], default=0)
+
+        return jsonify({
+            "raw_text": raw_text.strip(),
+            "estimated_kwh_per_year": estimated
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    finally:
+        # Clean temp file
+        if os.path.exists(img_path):
+            os.remove(img_path)
 
 @app.route("/api/add_appliance", methods=["POST"])
+
 def api_add_appliance():
     # Accept form-data (from frontend)
     name = request.form.get("name") or "Unnamed"
