@@ -3,67 +3,72 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>WattCompare Scanner</title>
+<title>WattCompare – Smart Energy Scanner</title>
 <link rel="stylesheet" href="style.css" />
 </head>
 
 <body>
 
-<header>
-    <h1>⚡ WattCompare</h1>
-    <p>Scan appliance labels • Detect energy usage • Compare smarter</p>
+<header class="header">
+  <h1 class="title">⚡ WattCompare</h1>
+  <p class="subtitle">Scan • Detect • Compare • Save Energy</p>
 </header>
 
-<div class="camera-container">
-    <video id="video" autoplay playsinline></video>
-    <canvas id="canvas" style="display:none;"></canvas>
+<section class="camera-section">
+  <div class="camera-box">
+      <video id="video" autoplay playsinline></video>
+      <canvas id="canvas" style="display:none;"></canvas>
 
-    <button id="captureBtn" class="scan-btn">
-        <span class="scan-icon">📸</span> Scan Label
-        <span class="pulse"></span>
-    </button>
-</div>
+      <!-- Floating Scan Button -->
+      <button id="captureBtn" class="scan-btn">
+        <span class="scan-icon">📷</span>
+        Scan Label
+        <span class="scan-ripple"></span>
+      </button>
+  </div>
 
-<div class="upload-container">
-    <label class="upload-btn">
-        Upload Image
-        <input type="file" id="upload" accept="image/*" hidden />
-    </label>
-</div>
+  <label class="upload-btn">
+    <input type="file" id="upload" accept="image/*" hidden />
+    <span>⬆ Upload Image</span>
+  </label>
+</section>
 
-<section class="result-box">
-    <h2>🧠 OCR Result</h2>
+<section class="card">
+  <h2>🔍 OCR Result</h2>
+  <div class="ocr-data">
     <div><strong>AEC Detected:</strong> <span id="detected">—</span></div>
     <div><strong>Raw Text:</strong></div>
     <pre id="raw">—</pre>
+  </div>
 </section>
 
-<section class="form-box">
-    <h2>💾 Save Appliance</h2>
-    <input id="name" placeholder="Appliance Name" />
-    <input id="price" placeholder="Price (₹)" type="number" />
-    <input id="rate" placeholder="Cost per kWh (₹)" type="number" />
-    <input id="manualAec" placeholder="Manual AEC (Optional)" />
-    <button id="save">Save Appliance</button>
+<section class="card">
+  <h2>💾 Save Appliance</h2>
+  <input id="name" placeholder="Appliance Name" />
+  <input id="price" placeholder="Price (₹)" type="number" />
+  <input id="rate" placeholder="Cost per kWh (₹)" type="number" />
+  <input id="manualAec" placeholder="Manual AEC (optional)" />
+  <button id="save" class="action-btn">Save</button>
 </section>
 
-<section class="list-box">
-    <h2>📋 Saved Appliances</h2>
-    <button id="refresh" class="small-btn">Refresh</button>
-    <div id="list"></div>
+<section class="card">
+  <div class="card-title-row">
+    <h2>📋 Appliances</h2>
+    <button id="refresh" class="small-btn">🔄 Refresh</button>
+  </div>
+  <div id="list"></div>
 </section>
 
-<section class="compare-box">
-    <h2>⚔ Compare</h2>
-    <button id="compareBtn" class="compare-btn">Compare Selected</button>
-    <pre id="compareResult"></pre>
+<section class="card">
+  <h2>⚔ Compare Appliances</h2>
+  <button id="compareBtn" class="compare-btn">Compare Now</button>
+  <pre id="compareResult" class="compare-box">Select Slot A & Slot B to compare</pre>
 </section>
 
-<section class="pdf-box">
-    <button id="exportPdfBtn" class="export-btn">📄 Export PDF Report</button>
+<section class="card">
+  <button id="exportPdfBtn" class="pdf-btn">📄 Export PDF</button>
 </section>
 
 <script src="script.js"></script>
-
 </body>
 </html>
