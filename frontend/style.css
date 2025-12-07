@@ -1,213 +1,151 @@
-/* GENERAL */
-body {
-  margin: 0;
-  background: #f6f9fc;
-  font-family: "Inter", sans-serif;
-  color: #222;
+// Your backend API
+const API_BASE = "https://let-waat.onrender.com/api";
+
+const video = document.getElementById("video");
+const canvas = document.getElementById("canvas");
+const captureBtn = document.getElementById("captureBtn");
+const uploadInput = document.getElementById("upload");
+
+const detectedEl = document.getElementById("detected");
+const rawEl = document.getElementById("raw");
+
+const saveBtn = document.getElementById("save");
+const listEl = document.getElementById("list");
+const refreshBtn = document.getElementById("refresh");
+const exportPdfBtn = document.getElementById("exportPdf");
+const compareBtn = document.getElementById("compareBtn");
+const compareResult = document.getElementById("compareResult");
+
+let selectedForCompare = [null, null];
+let appliances = [];
+
+// -------- START CAMERA ----------
+async function startCamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "environment" },
+      audio: false
+    });
+    video.srcObject = stream;
+  } catch (err) {
+    console.warn("Camera not available", err);
+  }
+}
+startCamera();
+
+// -------- OCR SEND ----------
+async function sendBlobForOcr(blob) {
+  const fd = new FormData();
+  fd.append("image", blob);
+  const res = await fetch(`${API_BASE}/ocr`, {
+    method: "POST",
+    body: fd
+  });
+  return await res.json();
 }
 
-h2 {
-  margin-bottom: 10px;
+captureBtn.onclick = () => {
+  const w = video.videoWidth, h = video.videoHeight;
+  canvas.width = w, canvas.height = h;
+  canvas.getContext("2d").drawImage(video, 0, 0, w, h);
+
+  canvas.toBlob(async (b) => {
+    if (!b) return;
+    const r = await sendBlobForOcr(b);
+    handleOcrResult(r);
+  }, "image/jpeg", 0.9);
+};
+
+uploadInput.onchange = async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const r = await sendBlobForOcr(file);
+  handleOcrResult(r);
+};
+
+function handleOcrResult(r) {
+  detectedEl.textContent = r.estimated_kwh_per_year || "—";
+  rawEl.textContent = r.raw_text || "—";
 }
 
-/* HEADER */
-.header {
-  text-align: center;
-  padding: 25px 10px;
-  background: linear-gradient(135deg, #005cff, #00c3ff);
-  color: white;
-  border-radius: 0 0 20px 20px;
-  animation: fadeDown 0.7s ease-out;
+// -------- SAVE APPLIANCE ----------
+saveBtn.onclick = async () => {
+  const name = document.getElementById("name").value;
+  const price = document.getElementById("price").value;
+  const rate = document.getElementById("rate").value;
+  const manual = document.getElementById("manualAec").value;
+
+  const kwh = manual || detectedEl.textContent;
+  if (!kwh || kwh === "—") return alert("No AEC detected!");
+
+  const fd = new FormData();
+  fd.append("name", name);
+  fd.append("price", price);
+  fd.append("energy_rate", rate);
+  fd.append("aec", kwh);
+
+  const res = await fetch(`${API_BASE}/add_appliance`, { method: "POST", body: fd });
+  alert("Saved successfully!");
+  fetchList();
+};
+
+// -------- FETCH LIST ----------
+async function fetchList() {
+  const res = await fetch(`${API_BASE}/list_appliances`);
+  appliances = await res.json();
+  renderList();
+}
+refreshBtn.onclick = fetchList;
+fetchList();
+
+function renderList() {
+  listEl.innerHTML = "";
+  appliances.forEach(a => {
+    const div = document.createElement("div");
+    div.className = "item";
+
+    div.innerHTML = `
+      <div>
+        <strong>${a.name}</strong><br>
+        <small>${a.energy_kwh} kWh • ₹${a.price}</small>
+      </div>
+      <div>
+        <button onclick="selectSlot(0, ${a.id})">Slot A</button>
+        <button onclick="selectSlot(1, ${a.id})">Slot B</button>
+      </div>
+    `;
+
+    listEl.appendChild(div);
+  });
 }
 
-.title {
-  margin: 0;
-  font-size: 32px;
-  font-weight: 800;
-}
+window.selectSlot = (slot, id) => {
+  selectedForCompare[slot] = id;
+};
 
-.subtitle {
-  margin: 5px 0 0;
-  opacity: 0.8;
-}
+// -------- COMPARE ----------
+compareBtn.onclick = async () => {
+  if (!selectedForCompare[0] || !selectedForCompare[1])
+    return alert("Select two appliances!");
 
-/* CAMERA BOX */
-.camera-section {
-  padding: 10px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
+  const res = await fetch(`${API_BASE}/compare`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ids: selectedForCompare })
+  });
 
-.camera-box {
-  width: 100%;
-  max-width: 450px;
-  position: relative;
-  border-radius: 16px;
-  overflow: hidden;
-  box-shadow: 0 6px 18px rgba(0,0,0,0.15);
-  animation: fadeIn 0.8s;
-}
+  const data = await res.json();
+  compareResult.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+};
 
-video {
-  width: 100%;
-  border-radius: 16px;
-}
-
-/* SCAN BUTTON */
-.scan-btn {
-  position: absolute;
-  bottom: 12px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: #ff2e63;
-  color: white;
-  padding: 14px 22px;
-  border-radius: 40px;
-  font-size: 18px;
-  border: none;
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  cursor: pointer;
-  box-shadow: 0 4px 12px rgba(255,50,80,0.4);
-  animation: pop 0.5s ease-out;
-}
-
-.scan-btn:hover {
-  background: #e62855;
-  transform: translateX(-50%) scale(1.05);
-}
-
-.scan-ripple {
-  position: absolute;
-  width: 80px;
-  height: 80px;
-  border: 3px solid rgba(255,80,120,0.4);
-  border-radius: 50%;
-  top: -20px;
-  left: -20px;
-  animation: ripple 1.6s infinite;
-}
-
-/* UPLOAD BUTTON */
-.upload-btn {
-  margin-top: 12px;
-  background: #007bff;
-  color: white;
-  padding: 12px 18px;
-  border-radius: 12px;
-  cursor: pointer;
-  font-weight: 600;
-  box-shadow: 0 4px 12px rgba(0,123,255,0.3);
-}
-
-.upload-btn:hover {
-  background: #0069d9;
-}
-
-/* CARD SECTIONS */
-.card {
-  background: white;
-  margin: 15px;
-  padding: 18px;
-  border-radius: 16px;
-  box-shadow: 0 3px 12px rgba(0,0,0,0.1);
-  animation: fadeIn 0.6s ease-out;
-}
-
-/* INPUTS */
-input {
-  width: 100%;
-  padding: 12px;
-  border-radius: 12px;
-  border: 1px solid #ddd;
-  margin-top: 10px;
-  font-size: 16px;
-}
-
-/* BUTTONS */
-.action-btn, .compare-btn, .pdf-btn {
-  margin-top: 12px;
-  background: #28a745;
-  color: white;
-  padding: 14px;
-  border-radius: 12px;
-  border: none;
-  font-size: 17px;
-  cursor: pointer;
-  transition: 0.25s;
-}
-
-.action-btn:hover {
-  background: #218838;
-  transform: scale(1.03);
-}
-
-.compare-btn {
-  background: #ffa502;
-}
-
-.compare-btn:hover {
-  background: #e69502;
-}
-
-.pdf-btn {
-  background: #5352ed;
-}
-
-.pdf-btn:hover {
-  background: #4544d4;
-}
-
-/* APPLIANCE LIST */
-#list .item {
-  background: #f1f3f5;
-  padding: 12px;
-  border-radius: 12px;
-  margin-top: 10px;
-  display: flex;
-  justify-content: space-between;
-  border-left: 5px solid #007bff;
-  transition: 0.3s;
-}
-
-#list .item:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-}
-
-.slot-btn {
-  background: #00b894;
-  color: white;
-  padding: 6px 10px;
-  margin-left: 5px;
-  border-radius: 8px;
-  font-size: 13px;
-  border: none;
-}
-
-.slot-btn:hover {
-  background: #009874;
-}
-
-/* ANIMATIONS */
-@keyframes fadeIn {
-  from { opacity:0; transform: translateY(15px); }
-  to { opacity:1; transform: translateY(0); }
-}
-
-@keyframes fadeDown {
-  from { opacity:0; transform: translateY(-20px); }
-  to { opacity:1; transform: translateY(0); }
-}
-
-@keyframes pop {
-  from { transform: translateX(-50%) scale(0.6); opacity:0; }
-  to { transform: translateX(-50%) scale(1); opacity:1; }
-}
-
-@keyframes ripple {
-  0% { transform: scale(1); opacity:1; }
-  100% { transform: scale(1.9); opacity:0; }
-}
+// -------- EXPORT PDF ----------
+exportPdfBtn.onclick = async () => {
+  const res = await fetch(`${API_BASE}/export_pdf`);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "WattCompare_Report.pdf";
+  a.click();
+  URL.revokeObjectURL(url);
+};
