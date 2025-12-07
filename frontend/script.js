@@ -1,131 +1,151 @@
-const API = "https://let-waat.onrender.com/api";
+// Your backend API
+const API_BASE = "https://let-waat.onrender.com/api";
 
 const video = document.getElementById("video");
 const canvas = document.getElementById("canvas");
+const captureBtn = document.getElementById("captureBtn");
+const uploadInput = document.getElementById("upload");
 
 const detectedEl = document.getElementById("detected");
 const rawEl = document.getElementById("raw");
+
+const saveBtn = document.getElementById("save");
 const listEl = document.getElementById("list");
+const refreshBtn = document.getElementById("refresh");
+const exportPdfBtn = document.getElementById("exportPdf");
+const compareBtn = document.getElementById("compareBtn");
 const compareResult = document.getElementById("compareResult");
 
-let selected = [null, null];
+let selectedForCompare = [null, null];
 let appliances = [];
 
-// Start Camera
+// -------- START CAMERA ----------
 async function startCamera() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "environment" }
+      video: { facingMode: "environment" },
+      audio: false
     });
     video.srcObject = stream;
   } catch (err) {
-    alert("Camera permission is blocked. Please enable camera access.");
+    console.warn("Camera not available", err);
   }
 }
 startCamera();
 
-// OCR Process
-async function sendImage(blob) {
+// -------- OCR SEND ----------
+async function sendBlobForOcr(blob) {
   const fd = new FormData();
   fd.append("image", blob);
-
-  const res = await fetch(`${API}/ocr`, { method: "POST", body: fd });
+  const res = await fetch(`${API_BASE}/ocr`, {
+    method: "POST",
+    body: fd
+  });
   return await res.json();
 }
 
-// Capture Button
-document.getElementById("captureBtn").onclick = async () => {
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
+captureBtn.onclick = () => {
+  const w = video.videoWidth, h = video.videoHeight;
+  canvas.width = w, canvas.height = h;
+  canvas.getContext("2d").drawImage(video, 0, 0, w, h);
 
-  canvas.getContext("2d").drawImage(video, 0, 0);
-
-  canvas.toBlob(async (blob) => {
-    detectedEl.textContent = "Scanning…";
-    const result = await sendImage(blob);
-    showOCR(result);
-  }, "image/jpeg");
+  canvas.toBlob(async (b) => {
+    if (!b) return;
+    const r = await sendBlobForOcr(b);
+    handleOcrResult(r);
+  }, "image/jpeg", 0.9);
 };
 
-// File Upload
-document.getElementById("upload").onchange = async (e) => {
+uploadInput.onchange = async (e) => {
   const file = e.target.files[0];
   if (!file) return;
-
-  detectedEl.textContent = "Scanning…";
-  const res = await sendImage(file);
-  showOCR(res);
+  const r = await sendBlobForOcr(file);
+  handleOcrResult(r);
 };
 
-// Display OCR results
-function showOCR(res) {
-  detectedEl.textContent = res.estimated_kwh || res.aec || "Not detected";
-  rawEl.textContent = res.raw_text || "—";
+function handleOcrResult(r) {
+  detectedEl.textContent = r.estimated_kwh_per_year || "—";
+  rawEl.textContent = r.raw_text || "—";
 }
 
-// Save Appliance
-document.getElementById("save").onclick = async () => {
+// -------- SAVE APPLIANCE ----------
+saveBtn.onclick = async () => {
+  const name = document.getElementById("name").value;
+  const price = document.getElementById("price").value;
+  const rate = document.getElementById("rate").value;
+  const manual = document.getElementById("manualAec").value;
+
+  const kwh = manual || detectedEl.textContent;
+  if (!kwh || kwh === "—") return alert("No AEC detected!");
+
   const fd = new FormData();
-  fd.append("name", document.getElementById("name").value);
-  fd.append("price", document.getElementById("price").value);
-  fd.append("energy_rate", document.getElementById("rate").value);
-  fd.append("aec", document.getElementById("manualAec").value || detectedEl.textContent);
+  fd.append("name", name);
+  fd.append("price", price);
+  fd.append("energy_rate", rate);
+  fd.append("aec", kwh);
 
-  await fetch(`${API}/add_appliance`, { method: "POST", body: fd });
-
-  alert("Saved!");
-  loadList();
+  const res = await fetch(`${API_BASE}/add_appliance`, { method: "POST", body: fd });
+  alert("Saved successfully!");
+  fetchList();
 };
 
-// Load Appliance List
-async function loadList() {
-  const res = await fetch(`${API}/list_appliances`);
+// -------- FETCH LIST ----------
+async function fetchList() {
+  const res = await fetch(`${API_BASE}/list_appliances`);
   appliances = await res.json();
-  renderItems();
+  renderList();
 }
-loadList();
+refreshBtn.onclick = fetchList;
+fetchList();
 
-function renderItems() {
+function renderList() {
   listEl.innerHTML = "";
   appliances.forEach(a => {
-    listEl.innerHTML += `
-      <div class="item">
-        <div>
-          <strong>${a.name}</strong><br>
-          <small>${a.energy_kwh} kWh/year • ₹${a.price}</small>
-        </div>
-        <div>
-          <button class="slot-btn" onclick="slotSet(0, ${a.id})">A</button>
-          <button class="slot-btn" onclick="slotSet(1, ${a.id})">B</button>
-        </div>
+    const div = document.createElement("div");
+    div.className = "item";
+
+    div.innerHTML = `
+      <div>
+        <strong>${a.name}</strong><br>
+        <small>${a.energy_kwh} kWh • ₹${a.price}</small>
+      </div>
+      <div>
+        <button onclick="selectSlot(0, ${a.id})">Slot A</button>
+        <button onclick="selectSlot(1, ${a.id})">Slot B</button>
       </div>
     `;
+
+    listEl.appendChild(div);
   });
 }
 
-window.slotSet = (slot, id) => {
-  selected[slot] = id;
+window.selectSlot = (slot, id) => {
+  selectedForCompare[slot] = id;
 };
 
-// Compare
-document.getElementById("compareBtn").onclick = async () => {
-  const res = await fetch(`${API}/compare`, {
+// -------- COMPARE ----------
+compareBtn.onclick = async () => {
+  if (!selectedForCompare[0] || !selectedForCompare[1])
+    return alert("Select two appliances!");
+
+  const res = await fetch(`${API_BASE}/compare`, {
     method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({ ids: selected })
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ids: selectedForCompare })
   });
 
-  compareResult.textContent = JSON.stringify(await res.json(), null, 2);
+  const data = await res.json();
+  compareResult.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
 };
 
-// Export PDF
-document.getElementById("exportPdfBtn").onclick = async () => {
-  const res = await fetch(`${API}/export_pdf`);
+// -------- EXPORT PDF ----------
+exportPdfBtn.onclick = async () => {
+  const res = await fetch(`${API_BASE}/export_pdf`);
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
-  
   const a = document.createElement("a");
   a.href = url;
   a.download = "WattCompare_Report.pdf";
   a.click();
+  URL.revokeObjectURL(url);
 };
